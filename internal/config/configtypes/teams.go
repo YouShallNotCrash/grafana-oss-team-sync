@@ -107,6 +107,14 @@ func (c *Config) ValidateTeamOrgs() error {
 	return nil
 }
 
+// SanitizeTeams drops team entries without a name, which would otherwise produce an
+// empty source filter.
+func (c *Config) SanitizeTeams() {
+	c.Teams = slices.DeleteFunc(c.Teams, func(team Team) bool {
+		return strings.TrimSpace(team.Name) == ""
+	})
+}
+
 // Names returns the plain list of team display names, e.g. to query a source plugin.
 func (t Teams) Names() []string {
 	names := make([]string, len(t))

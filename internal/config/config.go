@@ -107,6 +107,9 @@ func loadEnvironmentVariables(k *koanf.Koanf) error {
 			case configtypes.FeaturesDryRunOptimized:
 				return configtypes.FeaturesDryRunParameter, v
 
+			case configtypes.FeaturesEntraIdUseSearchInsteadOfFilterOptimized:
+				return configtypes.FeaturesEntraIdUseSearchInsteadOfFilterParameter, v
+
 			// "teams" - respect comma separated list
 			case configtypes.TeamsParameter:
 				return k, splitTeamNames(v)
@@ -158,6 +161,9 @@ func loadCLIParameter(k *koanf.Koanf, fs *pflag.FlagSet) error {
 
 		case configtypes.FeaturesDryRunOptimized:
 			return configtypes.FeaturesDryRunParameter, val
+
+		case configtypes.FeaturesEntraIdUseSearchInsteadOfFilterOptimized:
+			return configtypes.FeaturesEntraIdUseSearchInsteadOfFilterParameter, val
 
 		// "teams" - respect comma separated list
 		case configtypes.TeamsParameter:
@@ -269,6 +275,7 @@ func Load() error {
 		slog.Bool(configtypes.FeaturesAddLocalAdminToTeamsOptimized, Instance.Features.AddLocalAdminToTeams),
 		slog.Bool(configtypes.FeaturesDeleteUnlistedOptimized, Instance.Features.DeleteUnlisted),
 		slog.Bool(configtypes.FeaturesDryRunOptimized, Instance.Features.DryRun),
+		slog.Bool(configtypes.FeaturesEntraIdUseSearchInsteadOfFilterOptimized, Instance.Features.EntraIdUseSearchInsteadOfFilter),
 	)
 
 	// Validate Grafana authtype input

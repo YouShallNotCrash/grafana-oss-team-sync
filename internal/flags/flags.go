@@ -58,6 +58,7 @@ func Load() error {
 	Instance.Bool(configtypes.FeaturesDisableUsersOptimized, configtypes.FeaturesDisableUsersDefault, configtypes.FeaturesDisableUsersFlagHelp)
 	Instance.Bool(configtypes.FeaturesDeleteUnlistedOptimized, configtypes.FeaturesDeleteUnlistedDefault, configtypes.FeaturesDeleteUnlistedFlagHelp)
 	Instance.Bool(configtypes.FeaturesDryRunOptimized, configtypes.FeaturesDryRunDefault, configtypes.FeaturesDryRunFlagHelp)
+	Instance.Bool(configtypes.FeaturesEntraIdUseSearchInsteadOfFilterOptimized, configtypes.FeaturesEntraIdUseSearchInsteadOfFilterDefault, configtypes.FeaturesEntraIdUseSearchInsteadOfFilterFlagHelp)
 
 	// Add "source" flag
 	Instance.StringP(configtypes.SourceParameter, configtypes.SourceFlagShort, configtypes.SourceDefault, configtypes.SourceFlagHelp)

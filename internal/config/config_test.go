@@ -337,10 +337,11 @@ func TestUnmarshalIntoStruct(t *testing.T) {
 				Source:     configtypes.Source("someothersource"),
 				AuthFile:   "someauthfile.env",
 				Features: configtypes.Features{
-					DisableFolders:       true,
-					DisableUserSync:      true,
-					AddLocalAdminToTeams: false,
-					DryRun:               true,
+					DisableFolders:                  true,
+					DisableUserSync:                 true,
+					AddLocalAdminToTeams:            false,
+					DryRun:                          true,
+					EntraIdUseSearchInsteadOfFilter: true,
 				},
 				Grafana: configtypes.Grafana{
 					AuthType: "someotherauthtype",
@@ -531,10 +532,11 @@ func TestLoad(t *testing.T) {
 				Source:     configtypes.Source("entraid"),
 				AuthFile:   "../../test/data/unit-tests_authfile.env",
 				Features: configtypes.Features{
-					DisableFolders:       true,
-					DisableUserSync:      true,
-					AddLocalAdminToTeams: false,
-					DryRun:               true,
+					DisableFolders:                  true,
+					DisableUserSync:                 true,
+					AddLocalAdminToTeams:            false,
+					DryRun:                          true,
+					EntraIdUseSearchInsteadOfFilter: true,
 				},
 				Grafana: configtypes.Grafana{
 					AuthType: "token",

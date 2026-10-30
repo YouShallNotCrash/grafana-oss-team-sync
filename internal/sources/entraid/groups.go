@@ -116,16 +116,16 @@ func buildGroupSearch(teams []string) string {
 func (g *groups) getInitialGroupRequest() (*models.GroupCollectionResponseable, error) {
 
 	requestCount := true
-	requestFilter := "displayName in ('" + strings.Join(config.Instance.Teams.Names(), "', '") + "')"
 	requestParams := &graphgroups.GroupsRequestBuilderGetQueryParameters{
 		Select: []string{"id", "displayName", "mail"},
 		Count:  &requestCount,
 	}
+	teamNames := config.Instance.Teams.Names()
 	if config.Instance.Features.EntraIdUseSearchInsteadOfFilter {
-		requestSearch := buildGroupSearch(config.Instance.Teams)
+		requestSearch := buildGroupSearch(teamNames)
 		requestParams.Search = &requestSearch
 	} else {
-		requestFilter := buildGroupFilter(config.Instance.Teams)
+		requestFilter := buildGroupFilter(teamNames)
 		requestParams.Filter = &requestFilter
 	}
 	configuration := &graphgroups.GroupsRequestBuilderGetRequestConfiguration{

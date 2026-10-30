@@ -9,6 +9,8 @@ type Features struct {
 	AddLocalAdminToTeams bool `yaml:"addLocalAdminToTeams"`
 	DeleteUnlisted       bool `yaml:"deleteUnlisted"`
 	DryRun               bool `yaml:"dryRun"`
+
+	EntraIdUseSearchInsteadOfFilter bool `yaml:"entraIdUseSearchInsteadOfFilter"`
 }
 
 const (
@@ -36,4 +38,9 @@ const (
 	FeaturesDryRunFlagHelp  string = "feature: only log what deleteUnlisted would delete, without deleting anything"
 	FeaturesDryRunParameter string = "features.dryRun"
 	FeaturesDryRunOptimized string = "dryrun"
+
+	FeaturesEntraIdUseSearchInsteadOfFilterDefault   bool   = false
+	FeaturesEntraIdUseSearchInsteadOfFilterFlagHelp  string = "feature: EntraID - use the tokenized $search instead of an exact $filter to find groups"
+	FeaturesEntraIdUseSearchInsteadOfFilterParameter string = "features.entraIdUseSearchInsteadOfFilter"
+	FeaturesEntraIdUseSearchInsteadOfFilterOptimized string = "entraidusesearchinsteadoffilter"
 )
