@@ -112,6 +112,7 @@ func TestLoadEnvironmentVariables(t *testing.T) {
 		{"translate feature addlocaladmintoteams", "GOTS_ADDLOCALADMINTOTEAMS", "valid", "features.addLocalAdminToTeams", "valid"},
 		{"translate feature disablefolders", "GOTS_DISABLEFOLDERS", "valid", "features.disableFolders", "valid"},
 		{"translate feature disableusersync", "GOTS_DISABLEUSERSYNC", "valid", "features.disableUserSync", "valid"},
+		{"translate feature entraidusesearchinsteadoffilter", "GOTS_ENTRAIDUSESEARCHINSTEADOFFILTER", "valid", "features.entraIdUseSearchInsteadOfFilter", "valid"},
 		// TODO: improve to actually check type here
 		{"load one team", "GOTS_TEAMS", "teamA", "teams", "[teamA]"},
 		{"load two teams", "GOTS_TEAMS", "teamA,teamB", "teams", "[teamA teamB]"},
@@ -157,6 +158,7 @@ func TestLoadCLIParameter(t *testing.T) {
 		{"translate feature addlocaladmintoteams", "addlocaladmintoteams", "valid", "features.addLocalAdminToTeams", "valid"},
 		{"translate feature disablefolders", "disablefolders", "valid", "features.disableFolders", "valid"},
 		{"translate feature disableusersync", "disableusersync", "valid", "features.disableUserSync", "valid"},
+		{"translate feature entraidusesearchinsteadoffilter", "entraidusesearchinsteadoffilter", "valid", "features.entraIdUseSearchInsteadOfFilter", "valid"},
 		// TODO: improve to actually check type here
 		{"load one team", "teams", "teamA", "teams", "[teamA]"},
 		{"load two teams", "teams", "teamA,teamB", "teams", "[teamA teamB]"},

@@ -258,6 +258,10 @@ func Load() error {
 		return err
 	}
 
+	// Drop empty entries (e.g. introduced by default flag values) so we never
+	// build an empty source filter / search later on
+	Instance.SanitizeTeams()
+
 	// Output feature configuration if non-defaults set
 	configLog.Info("feature status",
 		slog.Bool(configtypes.FeaturesDisableFoldersOptimized, Instance.Features.DisableFolders),
