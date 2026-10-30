@@ -18,9 +18,15 @@ grafana:
 
 
 teams:
-  - group-mock-1
-  - group-mock-2
-  - group-mock-3
+  - name: group-mock-1
+    orgs:
+      1: Viewer
+  - name: group-mock-2
+    orgs:
+      1: Viewer
+  - name: group-mock-3
+    orgs:
+      1: Viewer
 
 
 

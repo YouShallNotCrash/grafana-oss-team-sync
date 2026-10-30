@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 
 	"github.com/skuethe/grafana-oss-team-sync/internal/config"
 	"github.com/skuethe/grafana-oss-team-sync/internal/flags"
@@ -66,6 +67,9 @@ func main() {
 		panic(err)
 	}
 
+	// Snapshot the configured teams: processing the source removes matched names from config.Instance.Teams
+	configuredTeams := slices.Clone(config.Instance.Teams)
+
 	// Call the configured source plugin
 	grafanaTeamList := sources.CallPlugin()
 
@@ -77,6 +81,9 @@ func main() {
 
 	// Grafana: continue to process folders
 	grafana.Instance.ProcessFolders(grafanaTeamList)
+
+	// Grafana: remove teams, folders and users that are no longer configured or sourced (if enabled)
+	grafana.Instance.DeleteUnlisted(configuredTeams, grafanaTeamList)
 
 	slog.Info("finished Grafana OSS Team Sync")
 }

@@ -7,6 +7,8 @@ type Features struct {
 	DisableFolders       bool `yaml:"disableFolders"`
 	DisableUserSync      bool `yaml:"disableUserSync"`
 	AddLocalAdminToTeams bool `yaml:"addLocalAdminToTeams"`
+	DeleteUnlisted       bool `yaml:"deleteUnlisted"`
+	DryRun               bool `yaml:"dryRun"`
 }
 
 const (
@@ -24,4 +26,14 @@ const (
 	FeaturesDisableUsersFlagHelp  string = "feature: disable the user sync"
 	FeaturesDisableUsersParameter string = "features.disableUserSync"
 	FeaturesDisableUsersOptimized string = "disableusersync"
+
+	FeaturesDeleteUnlistedDefault   bool   = false
+	FeaturesDeleteUnlistedFlagHelp  string = "feature: delete Grafana teams, folders and users that are no longer in the config or source"
+	FeaturesDeleteUnlistedParameter string = "features.deleteUnlisted"
+	FeaturesDeleteUnlistedOptimized string = "deleteunlisted"
+
+	FeaturesDryRunDefault   bool   = true
+	FeaturesDryRunFlagHelp  string = "feature: only log what deleteUnlisted would delete, without deleting anything"
+	FeaturesDryRunParameter string = "features.dryRun"
+	FeaturesDryRunOptimized string = "dryrun"
 )

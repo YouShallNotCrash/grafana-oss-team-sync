@@ -162,6 +162,13 @@ func New() error {
 		currentOrgID: currentOrg.Payload.ID,
 	}
 
+	// API tokens and service account tokens are pinned to one org, so token auth may only target that org.
+	if config.Instance.Grafana.AuthType == configtypes.GrafanaAuthTypeToken {
+		if err := validateTokenOrgs(currentOrg.Payload.ID, config.Instance.Teams, config.Instance.Folders); err != nil {
+			return err
+		}
+	}
+
 	// Only basic auth can switch orgs (API keys/service account tokens are pinned to one org).
 	if config.Instance.Grafana.AuthType == configtypes.GrafanaAuthTypeBasicAuth {
 		if signedInUser, err := client.SignedInUser.GetSignedInUser(); err != nil {
@@ -173,6 +180,24 @@ func New() error {
 		}
 	}
 
+	return nil
+}
+
+// validateTokenOrgs makes sure every team and folder targets the organization the token is scoped to.
+// Folder orgId 0 means the default organization, which is the token's organization.
+func validateTokenOrgs(tokenOrgID int64, teams configtypes.Teams, folders configtypes.Folders) error {
+	for _, team := range teams {
+		for _, orgID := range team.TargetOrgs() {
+			if orgID != tokenOrgID {
+				return fmt.Errorf("%w (team %q, orgId %d, token org %d)", configtypes.ErrMultiOrgRequiresBasicAuth, team.Name, orgID, tokenOrgID)
+			}
+		}
+	}
+	for uid, folder := range folders {
+		if folder.OrgID != 0 && folder.OrgID != tokenOrgID {
+			return fmt.Errorf("%w (folder %q, orgId %d, token org %d)", configtypes.ErrMultiOrgRequiresBasicAuth, uid, folder.OrgID, tokenOrgID)
+		}
+	}
 	return nil
 }
 

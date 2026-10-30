@@ -86,7 +86,6 @@ Things which potentially will be added in the future:
 - allow to reference `users` on folder permissions
 - allow to reference `roles` on folder permissions
 - allow to assign `admin` permissions to team members
-- **delete** users and groups when removed from the source / sync list
 
 <p align="right">( <a href="#top">Back to top</a> )</p>
 
@@ -148,7 +147,9 @@ The following hierarchy is used when merging different config sources, overridin
 | Feature: disable folder sync      | **config.yaml**: `features.disableFolders`<br>**argument**: `--disablefolders`<br>**env var**: `GOTS_DISABLEFOLDERS`                   | Control the folder sync feature<br><br>**Type**: `bool`<br>**Default**: `false` |
 | Feature: disable user sync        | **config.yaml**: `features.disableUserSync`<br>**argument**: `--disableusersync`<br>**env var**: `GOTS_DISABLEUSERSYNC`                | Control the user sync feature<br><br>**Type**: `bool`<br>**Default**: `false` |
 | Feature: add local admin to teams | **config.yaml**: `features.addLocalAdminToTeams`<br>**argument**: `--addlocaladmintoteams`<br>**env var**: `GOTS_ADDLOCALADMINTOTEAMS` | Control adding Grafana local admin to each team<br><br>**Type**: `bool`<br>**Default**: `true` |
-| Team sync                         | **config.yaml**: `teams`<br>**argument**: `--teams` or `-t`<br>**env var**: `GOTS_TEAMS`                                               | Define the list of teams to sync<br><br>**Type**: `[]string` or `[]{name, orgId}`, see [Multi-organization support](#multi-organization-support) |
+| Feature: delete unlisted          | **config.yaml**: `features.deleteUnlisted`<br>**argument**: `--deleteunlisted`<br>**env var**: `GOTS_DELETEUNLISTED`                  | Delete Grafana resources that are not in the config or the source. Covers teams in configured orgs, top-level folders in configured orgs and users not returned by the source. See [Opinionated Behaviour](#opinionated-behaviour)<br><br>**Type**: `bool`<br>**Default**: `false` |
+| Feature: dry run                  | **config.yaml**: `features.dryRun`<br>**argument**: `--dryrun`<br>**env var**: `GOTS_DRYRUN`                                           | Only log what would be deleted by the delete unlisted feature, without deleting anything<br><br>**Type**: `bool`<br>**Default**: `true` |
+| Team sync                         | **config.yaml**: `teams`<br>**argument**: `--teams` or `-t`<br>**env var**: `GOTS_TEAMS`                                               | Define the list of teams to sync. Every team needs `name` and at least one entry in `orgs`<br><br>**Type**: `[]{name, orgs}`, see [Multi-organization support](#multi-organization-support) |
 | Folder sync                       | **config.yaml**: `folders`                                                                                                             | Define the list of folders to sync<br><br>**Type**: `[]interface` |
 
 <!-- CONFIGURATION - GRAFANA -->
@@ -195,15 +196,22 @@ If you have [enabled EntraID OAuth][entraidoauth] for SSO authentication in Graf
 <!-- MULTI-ORGANIZATION SUPPORT -->
 ## Multi-organization support
 
-By default, every configured team (and folder) is synced into whichever Grafana organization your configured credentials default to (usually the `Main Org.`, id `1`).
+By default, every folder is synced into whichever Grafana organization your configured credentials default to (usually the `Main Org.`, id `1`). Teams are always defined per organization: every team must list at least one organization with a role in `orgs`.
 
-If your Grafana instance has multiple organizations, you can sync individual teams (and folders) into a specific organization by using the object form instead of a plain string in your `teams` list, and by setting `orgId` on a folder:
+To sync a team into one or more specific organizations, map each organization ID to the role the group's members get there. Use the same form for a single organization:
 
 ```yaml
 teams:
-  - myTeamInDefaultOrg          # plain string: uses the default organization
-  - name: myTeamInOrg2
-    orgId: 2
+  - name: myTeamInDefaultOrg    # one organization, role Viewer
+    orgs:
+      1: Viewer
+  - name: myTeamInOrg2          # one organization, role Editor
+    orgs:
+      2: Editor
+  - name: myTeamWithRoles       # one group, different organization roles per organization
+    orgs:
+      2: Editor
+      3: Admin
 
 folders:
   myfolder:
@@ -215,10 +223,16 @@ folders:
 ```
 
 Notes:
-- `orgId` is optional. If omitted (or `0`), the team/folder is synced into whichever organization your Grafana credentials default to - this preserves the previous single-organization behaviour.
-- Switching organizations per-request is only possible with `grafana.authtype: "basicauth"`, since a Grafana service account token/API key is always scoped to a single organization. Startup will fail with a clear error if you configure a non-default `orgId` while using `token` auth.
+- `orgs` maps organization IDs (greater than `0`) to the organization role that the members of the group get in that organization: `Viewer`, `Editor` or `Admin` (case-insensitive). The group is synced only into the organizations listed in `orgs`. A team without `orgs` (including a plain team name, or a team given only as a name on the CLI or in the `GOTS_TEAMS` env var) is rejected at startup.
+- Folders keep the optional `orgId` (`0` or omitted means the default organization of your credentials).
+- Switching organizations per-request is only possible with `grafana.authtype: "basicauth"`, since a Grafana service account token/API key is always scoped to a single organization. With `token` auth, every team `orgs` key and every folder `orgId` must be the organization the token belongs to, otherwise startup fails with a clear error.
 - Folder permission `teams` entries are resolved against the **same organization as the folder**. If you want to grant a team in org `2` access to a folder, both the team and the folder need `orgId: 2`.
-- When syncing users into a non-default organization, this tool automatically adds them (and the local admin, if `features.addLocalAdminToTeams` is enabled) as members of that organization (with the `Viewer` org role) before adding them to the team, since new users are always created in the default organization by Grafana's admin API.
+- When syncing users into a non-default organization, this tool automatically adds them (and the local admin, if `features.addLocalAdminToTeams` is enabled) as members of that organization before adding them to the team, since new users are always created in the default organization by Grafana's admin API. New members get the role configured in `orgs`.
+- Organization roles from `orgs` are enforced on every sync:
+  - an existing member whose role differs from the configured role is updated to the configured role
+  - if a user is a member of several groups that configure a role for the same organization, the highest role wins (`Admin` > `Editor` > `Viewer`)
+  - the `admin` user and the sync user are never changed
+  - a user who is removed from a group loses the team membership, but keeps their organization role
 
 <p align="right">( <a href="#top">Back to top</a> )</p>
 
@@ -230,9 +244,19 @@ Notes:
 Please note the following opinionated behaviour of this tool.
 
 - this tool should be the single point of truth for creating groups in Grafana. For that matter, we are enforcing the following:
-  - `Teams`: all members of each configured team are completely overridden with matching users from the source. If you added additional users or changed their permission (to "admin" e.g.), these changes will be lost during the next sync operation. This also helps with keeping the groups up to date with your configured source (when removing users for example)
+  - `Teams`: all members of each configured team are completely overridden with matching users from the source. If you added additional users or changed their permission (to "admin" e.g.), these changes will be lost during the next sync operation. Organization roles set with `orgs` are enforced the same way. This also helps with keeping the groups up to date with your configured source (when removing users for example)
   - `Folders`: the permissions of each folder are completely overridden with the input from your config. If you don't want this to happen, you can always disable the folder sync feature via config / env variable or command argument
 - if the user sync feature is enabled, all newly created users will get a randomly generated password assigned. This password is not available afterwards, as it should not be used in the first place. Ideally you have [set-up SSO authentication][setupssoauth] with the same source as your group and user sync
+- the source (config and Entra ID) is the source of truth when `deleteUnlisted` is enabled. Nothing is tracked between runs, so each run compares Grafana with the current config and source:
+  - `Teams`: teams in every organization referenced by `teams` in the config that are not listed there are deleted. Matching is case-insensitive
+  - `Folders`: top-level folders in every organization referenced by `folders` in the config that are not listed there are deleted. Deleting a folder also deletes its subfolders. Folders that still contain alert rules are not deleted and are logged
+  - `Users`: a Grafana user is deleted when no configured group returns them (by login or email), and only when basic auth and user sync are enabled. Removing a user from every configured group therefore deletes them from Grafana, including their access to all organizations. A user who is still a member of another configured group is kept. Server admins, the `admin` user and the sync user are never deleted. If the source returns no users at all, no users are deleted, so removing the last member of the last group does not delete that user
+  - Team membership is not reconciled by `deleteUnlisted`. Users removed from a group are still removed from its team by the normal team sync
+  - Organizations that no config entry references are never cleaned
+  - A team listed in `teams` whose name matches no Entra ID group is listed in the config, so its Grafana team is kept
+- use `dryRun` (default `true`) first to review what would be deleted. Dry run only logs the planned deletions. Set `dryRun` to `false` to delete
+- when basic auth is used, the sync user is added as `Admin` to each non-default organization that this tool works in (those referenced in your config), when it is not already a member. This is needed to switch into and manage that organization. Use a dedicated sync account for this
+
 
 <p align="right">( <a href="#top">Back to top</a> )</p>
 

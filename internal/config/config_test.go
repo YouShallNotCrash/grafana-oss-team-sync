@@ -311,6 +311,7 @@ func TestUnmarshalIntoStruct(t *testing.T) {
 					DisableFolders:       configtypes.FeaturesDisableFoldersDefault,
 					DisableUserSync:      configtypes.FeaturesDisableUsersDefault,
 					AddLocalAdminToTeams: configtypes.FeaturesAddLocalAdminToTeamsDefault,
+					DryRun:               configtypes.FeaturesDryRunDefault,
 				},
 				Grafana: configtypes.Grafana{
 					AuthType: configtypes.GrafanaAuthTypeDefault,
@@ -321,7 +322,7 @@ func TestUnmarshalIntoStruct(t *testing.T) {
 						Retry:    configtypes.GrafanaConnectionRetryDefault,
 					},
 				},
-				Teams:   configtypes.Teams{{Name: ""}},
+				Teams:   nil,
 				Folders: nil,
 			},
 		},
@@ -337,6 +338,7 @@ func TestUnmarshalIntoStruct(t *testing.T) {
 					DisableFolders:       true,
 					DisableUserSync:      true,
 					AddLocalAdminToTeams: false,
+					DryRun:               true,
 				},
 				Grafana: configtypes.Grafana{
 					AuthType: "someotherauthtype",
@@ -348,8 +350,8 @@ func TestUnmarshalIntoStruct(t *testing.T) {
 					},
 				},
 				Teams: configtypes.Teams{
-					{Name: "somegroup-1"},
-					{Name: "somegroup-2"},
+					{Name: "somegroup-1", Orgs: map[int64]configtypes.OrgRole{1: configtypes.OrgRoleViewer}},
+					{Name: "somegroup-2", Orgs: map[int64]configtypes.OrgRole{1: configtypes.OrgRoleViewer}},
 				},
 				Folders: configtypes.Folders{
 					"somefolder1": {
@@ -429,8 +431,8 @@ func TestLoadMultiOrgTeamsAndFolders(t *testing.T) {
 	}
 
 	expectedTeams := configtypes.Teams{
-		{Name: "group-unit-1"},
-		{Name: "group-unit-2", OrgID: 2},
+		{Name: "group-unit-1", Orgs: map[int64]configtypes.OrgRole{1: configtypes.OrgRoleViewer}},
+		{Name: "group-unit-2", Orgs: map[int64]configtypes.OrgRole{2: configtypes.OrgRoleViewer}},
 	}
 	if !cmp.Equal(Instance.Teams, expectedTeams) {
 		t.Errorf("difference: %+v", cmp.Diff(Instance.Teams, expectedTeams))
@@ -449,6 +451,36 @@ func TestLoadMultiOrgTeamsAndFolders(t *testing.T) {
 	}
 	if !cmp.Equal(Instance.Folders, expectedFolders) {
 		t.Errorf("difference: %+v", cmp.Diff(Instance.Folders, expectedFolders))
+	}
+}
+
+func TestLoadTeamOrgRoles(t *testing.T) {
+
+	os.Clearenv()
+	Instance = &configtypes.Config{}
+
+	if err := os.Setenv("GOTS_CONFIG", "../../test/data/unit-tests_config_teamroles.yaml"); err != nil {
+		t.Fatal(fmt.Errorf("%w (%v): %w", ErrCouldNotSetRequiredVariable, "GOTS_CONFIG", err))
+	}
+
+	if err := flags.Load(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Load(); err != nil {
+		t.Fatal(err)
+	}
+
+	expectedTeams := configtypes.Teams{
+		{Name: "group-unit-1", Orgs: map[int64]configtypes.OrgRole{1: configtypes.OrgRoleViewer}},
+		{Name: "group-unit-2", Orgs: map[int64]configtypes.OrgRole{2: configtypes.OrgRoleViewer}},
+		{Name: "group-unit-3", Orgs: map[int64]configtypes.OrgRole{
+			2: configtypes.OrgRoleEditor,
+			3: configtypes.OrgRoleAdmin,
+		}},
+	}
+	if !cmp.Equal(Instance.Teams, expectedTeams) {
+		t.Errorf("difference: %+v", cmp.Diff(Instance.Teams, expectedTeams))
 	}
 }
 
@@ -473,6 +505,7 @@ func TestLoad(t *testing.T) {
 					DisableFolders:       configtypes.FeaturesDisableFoldersDefault,
 					DisableUserSync:      configtypes.FeaturesDisableUsersDefault,
 					AddLocalAdminToTeams: configtypes.FeaturesAddLocalAdminToTeamsDefault,
+					DryRun:               configtypes.FeaturesDryRunDefault,
 				},
 				Grafana: configtypes.Grafana{
 					AuthType: configtypes.GrafanaAuthTypeDefault,
@@ -483,7 +516,7 @@ func TestLoad(t *testing.T) {
 						Retry:    configtypes.GrafanaConnectionRetryDefault,
 					},
 				},
-				Teams:   configtypes.Teams{{Name: ""}},
+				Teams:   nil,
 				Folders: nil,
 			},
 		},
@@ -499,6 +532,7 @@ func TestLoad(t *testing.T) {
 					DisableFolders:       true,
 					DisableUserSync:      true,
 					AddLocalAdminToTeams: false,
+					DryRun:               true,
 				},
 				Grafana: configtypes.Grafana{
 					AuthType: "token",
@@ -510,8 +544,8 @@ func TestLoad(t *testing.T) {
 					},
 				},
 				Teams: configtypes.Teams{
-					{Name: "group-unit-1"},
-					{Name: "group-unit-2"},
+					{Name: "group-unit-1", Orgs: map[int64]configtypes.OrgRole{1: configtypes.OrgRoleViewer}},
+					{Name: "group-unit-2", Orgs: map[int64]configtypes.OrgRole{2: configtypes.OrgRoleViewer}},
 				},
 				Folders: configtypes.Folders{
 					"folderunit1": {

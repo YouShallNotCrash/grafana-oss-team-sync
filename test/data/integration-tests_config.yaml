@@ -23,7 +23,9 @@ grafana:
 
 
 teams:
-  - not-used
+  - name: not-used
+    orgs:
+      1: Viewer
 
 
 

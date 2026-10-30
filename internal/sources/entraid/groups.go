@@ -35,12 +35,21 @@ func (g *groups) processGroupResult(result *models.GroupCollectionResponseable) 
 			mail = strings.ToLower(*groupMail)
 		}
 
+		var displayName string
+		if groupDisplayName != nil {
+			displayName = *groupDisplayName
+		}
+
 		groupLog := slog.With(
 			slog.Group("group",
-				slog.String("displayname", *groupDisplayName),
+				slog.String("displayname", displayName),
 				slog.String("id", groupId),
 			),
 		)
+		if groupDisplayName == nil {
+			groupLog.Warn("EntraID group is missing a display name, skipping")
+			continue
+		}
 		groupLog.Info("found EntraID group")
 
 		// A group can be configured multiple times to sync into several Grafana organizations
@@ -56,14 +65,17 @@ func (g *groups) processGroupResult(result *models.GroupCollectionResponseable) 
 		grafanaUserList := g.ProcessUsers(&groupId)
 
 		for _, team := range configuredTeams {
-			*g.grafanaTeams = append(*g.grafanaTeams, grafana.Team{
-				Parameter: &grafana.TeamParameter{
-					Name:  groupDisplayName,
-					Email: mail,
-				},
-				Users: grafanaUserList,
-				OrgID: team.OrgID,
-			})
+			for _, orgID := range team.TargetOrgs() {
+				*g.grafanaTeams = append(*g.grafanaTeams, grafana.Team{
+					Parameter: &grafana.TeamParameter{
+						Name:  groupDisplayName,
+						Email: mail,
+					},
+					Users: grafanaUserList,
+					OrgID: orgID,
+					Role:  team.RoleFor(orgID),
+				})
+			}
 		}
 		config.Instance.Teams = config.Instance.Teams.Remove(*groupDisplayName)
 	}

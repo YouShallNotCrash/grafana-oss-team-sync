@@ -28,7 +28,7 @@ func (s Source) String() string {
 	return string(s)
 }
 
-func (c *Config) ValdidateSourcePlugin() error {
+func (c *Config) ValidateSourcePlugin() error {
 	switch c.Source {
 	case SourcePluginEntraID:
 		return nil

@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2025 Sebastian Küthe and (other) contributors to project grafana-oss-team-sync <https://github.com/skuethe/grafana-oss-team-sync>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+teams:
+  - name: group-unit-1
+    orgs:
+      1: Viewer
+  - name: group-unit-2
+    orgs:
+      2: Viewer
+  - name: group-unit-3
+    orgs:
+      2: editor
+      3: Admin

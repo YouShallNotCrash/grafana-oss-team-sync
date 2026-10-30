@@ -4,16 +4,22 @@
 package grafana
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/grafana/grafana-openapi-client-go/client"
+	"github.com/grafana/grafana-openapi-client-go/client/orgs"
 	"github.com/grafana/grafana-openapi-client-go/client/teams"
 	"github.com/grafana/grafana-openapi-client-go/models"
 	"github.com/skuethe/grafana-oss-team-sync/internal/config"
+	"github.com/skuethe/grafana-oss-team-sync/internal/config/configtypes"
 )
+
+var ErrTeamNotFound = errors.New("team not found in organization")
 
 type TeamParameter models.CreateTeamCommand
 
@@ -23,9 +29,42 @@ type Team struct {
 	// OrgID is the Grafana organization to sync this team into.
 	// 0 (unset) uses whichever org the configured Grafana credentials default to.
 	OrgID int64
+	// Role is the organization role members of this team receive in OrgID.
+	// Empty means no role is configured: new members get Viewer and existing roles are left unchanged.
+	Role configtypes.OrgRole
 }
 
 type Teams []Team
+
+// orgUserKey identifies a user, by lowercase email, within one organization.
+type orgUserKey struct {
+	orgID int64
+	email string
+}
+
+// desiredOrgRoles holds the highest configured organization role for each user in each organization.
+type desiredOrgRoles map[orgUserKey]configtypes.OrgRole
+
+// desiredOrgRoles collects the configured organization roles of all teams. A user who is a member of
+// several groups that configure a role in the same organization gets the highest of those roles.
+func (t Teams) desiredOrgRoles() desiredOrgRoles {
+	roles := desiredOrgRoles{}
+	for _, team := range t {
+		if team.Role == "" || team.Users == nil {
+			continue
+		}
+		for _, user := range *team.Users {
+			if user.Email == "" {
+				continue
+			}
+			key := orgUserKey{orgID: team.OrgID, email: strings.ToLower(user.Email)}
+			if roles[key].Rank() < team.Role.Rank() {
+				roles[key] = team.Role
+			}
+		}
+	}
+	return roles
+}
 
 // Contains reports whether the given team name was synced into orgID as part of this list.
 func (t Teams) Contains(name string, orgID int64) bool {
@@ -47,7 +86,9 @@ func (t *Team) api() (*client.GrafanaHTTPAPI, error) {
 
 // ensureOrgMembership makes sure the given user/login is a member of this team's organization,
 // which is required before it can be added as a member of a team in that organization.
-func (t *Team) ensureOrgMembership(loginOrEmail string) error {
+// A new member gets desiredRole, or Viewer when no role is configured. An existing member's role is
+// only changed when a role is configured and differs; protected accounts are never changed.
+func (t *Team) ensureOrgMembership(loginOrEmail string, desiredRole configtypes.OrgRole) error {
 	if t.OrgID == 0 {
 		return nil
 	}
@@ -57,46 +98,88 @@ func (t *Team) ensureOrgMembership(loginOrEmail string) error {
 		return err
 	}
 	for _, orgUser := range orgUsers.Payload {
-		if strings.EqualFold(orgUser.Login, loginOrEmail) || strings.EqualFold(orgUser.Email, loginOrEmail) {
+		if !strings.EqualFold(orgUser.Login, loginOrEmail) && !strings.EqualFold(orgUser.Email, loginOrEmail) {
+			continue
+		}
+		if desiredRole == "" || strings.EqualFold(orgUser.Role, string(desiredRole)) || Instance.isProtectedLogin(orgUser.Login) {
 			return nil
 		}
+		slog.Info("updating organization role of existing member",
+			slog.String("user", loginOrEmail),
+			slog.Int64("orgId", t.OrgID),
+			slog.String("from", orgUser.Role),
+			slog.String("to", string(desiredRole)),
+		)
+		_, err := Instance.api.Orgs.UpdateOrgUser(&orgs.UpdateOrgUserParams{
+			OrgID:  t.OrgID,
+			UserID: orgUser.UserID,
+			Body:   &models.UpdateOrgUserCommand{Role: string(desiredRole)},
+		})
+		return err
 	}
 
+	role := string(configtypes.OrgRoleViewer)
+	if desiredRole != "" {
+		role = string(desiredRole)
+	}
 	_, err = Instance.api.Orgs.AddOrgUser(t.OrgID, &models.AddOrgUserCommand{
 		LoginOrEmail: loginOrEmail,
-		Role:         "Viewer",
+		Role:         role,
 	})
 	return err
 }
 
-func (t *Team) searchTeam() (*teams.SearchTeamsOK, error) {
+// teamPageSize is the number of teams requested per page when searching by name.
+const teamPageSize int64 = 1000
+
+// findTeam returns the team in the current organization whose name exactly matches the configured name.
+// Returns nil if no such team exists.
+func (t *Team) findTeam() (*models.TeamDTO, error) {
 	api, err := t.api()
 	if err != nil {
 		return nil, err
 	}
-	result, err := api.Teams.SearchTeams(&teams.SearchTeamsParams{
-		Name: t.Parameter.Name,
-	})
-	if err != nil {
-		return nil, err
+	// Grafana pages team results (1-based); a name filter can match more teams than fit on one page
+	for page := int64(1); ; page++ {
+		limit := teamPageSize
+		pageNumber := page
+		result, err := api.Teams.SearchTeams(&teams.SearchTeamsParams{
+			Name:    t.Parameter.Name,
+			Page:    &pageNumber,
+			Perpage: &limit,
+		})
+		if err != nil {
+			return nil, err
+		}
+		index := slices.IndexFunc(result.Payload.Teams, func(s *models.TeamDTO) bool {
+			return s.Name != nil && t.Parameter.Name != nil && *s.Name == *t.Parameter.Name
+		})
+		if index >= 0 {
+			return result.Payload.Teams[index], nil
+		}
+		if int64(len(result.Payload.Teams)) < teamPageSize {
+			return nil, nil
+		}
 	}
-	return result, nil
 }
 
 func (t *Team) doesTeamExist() (bool, error) {
-	result, err := t.searchTeam()
+	team, err := t.findTeam()
 	if err != nil {
 		return false, err
 	}
-	return len(result.Payload.Teams) == 1, nil
+	return team != nil, nil
 }
 
 func (t *Team) getTeamID() (*int64, error) {
-	result, err := t.searchTeam()
+	team, err := t.findTeam()
 	if err != nil {
 		return nil, err
 	}
-	return result.Payload.Teams[0].ID, nil
+	if team == nil {
+		return nil, ErrTeamNotFound
+	}
+	return team.ID, nil
 }
 
 func (t *Team) createTeam() error {
@@ -114,7 +197,7 @@ func (t *Team) createTeam() error {
 	return nil
 }
 
-func (t *Team) addUsersToTeam() (*[]string, error) {
+func (t *Team) addUsersToTeam(roles desiredOrgRoles) (*[]string, error) {
 	teamID, tErr := t.getTeamID()
 	if tErr != nil {
 		return nil, tErr
@@ -124,7 +207,7 @@ func (t *Team) addUsersToTeam() (*[]string, error) {
 	teamMemberList := &[]string{}
 
 	if config.Instance.Features.AddLocalAdminToTeams {
-		if err := t.ensureOrgMembership("admin@localhost"); err != nil {
+		if err := t.ensureOrgMembership("admin@localhost", ""); err != nil {
 			slog.Warn("could not add local admin to organization",
 				slog.Int64("orgId", t.OrgID),
 				slog.Any("error", err),
@@ -144,7 +227,8 @@ func (t *Team) addUsersToTeam() (*[]string, error) {
 			)
 			continue
 		}
-		if err := t.ensureOrgMembership(user.Email); err != nil {
+		role := roles[orgUserKey{orgID: t.OrgID, email: strings.ToLower(user.Email)}]
+		if err := t.ensureOrgMembership(user.Email, role); err != nil {
 			slog.Warn("could not add user to organization, skipping team membership",
 				slog.String("user", user.Email),
 				slog.Int64("orgId", t.OrgID),
@@ -179,6 +263,7 @@ func (t *Teams) ProcessTeams() {
 
 		countSkipped := 0
 		countCreated := 0
+		roles := t.desiredOrgRoles()
 
 		for _, team := range *t {
 
@@ -214,7 +299,7 @@ func (t *Teams) ProcessTeams() {
 				if !config.Instance.Features.DisableUserSync {
 					teamLog.Info("processing team members")
 
-					if userList, err := team.addUsersToTeam(); err != nil {
+					if userList, err := team.addUsersToTeam(roles); err != nil {
 						teamLog.Error("could not add users to team",
 							slog.Any("error", err),
 						)

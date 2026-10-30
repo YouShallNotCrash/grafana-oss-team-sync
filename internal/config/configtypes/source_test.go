@@ -70,7 +70,7 @@ func TestValidateSourcePlugin(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if output := test.input.ValdidateSourcePlugin(); !errors.Is(output, test.expected) {
+			if output := test.input.ValidateSourcePlugin(); !errors.Is(output, test.expected) {
 				t.Errorf("got %v, wanted %v", output, test.expected)
 			}
 		})

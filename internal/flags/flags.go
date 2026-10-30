@@ -56,6 +56,8 @@ func Load() error {
 	Instance.Bool(configtypes.FeaturesAddLocalAdminToTeamsOptimized, configtypes.FeaturesAddLocalAdminToTeamsDefault, configtypes.FeaturesAddLocalAdminToTeamsFlagHelp)
 	Instance.Bool(configtypes.FeaturesDisableFoldersOptimized, configtypes.FeaturesDisableFoldersDefault, configtypes.FeaturesDisableFoldersFlagHelp)
 	Instance.Bool(configtypes.FeaturesDisableUsersOptimized, configtypes.FeaturesDisableUsersDefault, configtypes.FeaturesDisableUsersFlagHelp)
+	Instance.Bool(configtypes.FeaturesDeleteUnlistedOptimized, configtypes.FeaturesDeleteUnlistedDefault, configtypes.FeaturesDeleteUnlistedFlagHelp)
+	Instance.Bool(configtypes.FeaturesDryRunOptimized, configtypes.FeaturesDryRunDefault, configtypes.FeaturesDryRunFlagHelp)
 
 	// Add "source" flag
 	Instance.StringP(configtypes.SourceParameter, configtypes.SourceFlagShort, configtypes.SourceDefault, configtypes.SourceFlagHelp)

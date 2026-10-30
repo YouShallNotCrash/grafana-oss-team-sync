@@ -26,8 +26,13 @@ type users struct {
 
 func (u *users) processUserResult(result *models.UserCollectionResponseable) {
 	for _, user := range (*result).GetValue() {
-		userDisplayName := *user.GetDisplayName()
-		userPrincipalName := *user.GetUserPrincipalName()
+		var userDisplayName, userPrincipalName string
+		if v := user.GetDisplayName(); v != nil {
+			userDisplayName = *v
+		}
+		if v := user.GetUserPrincipalName(); v != nil {
+			userPrincipalName = *v
+		}
 		userMail := user.GetMail()
 
 		var mail string
@@ -42,6 +47,10 @@ func (u *users) processUserResult(result *models.UserCollectionResponseable) {
 				slog.String("mail", mail),
 			),
 		)
+		if userPrincipalName == "" {
+			userLog.Warn("user is missing the required principal name - skipping")
+			continue
+		}
 		if userMail == nil {
 			userLog.Warn("user is missing the required email - skipping")
 			continue

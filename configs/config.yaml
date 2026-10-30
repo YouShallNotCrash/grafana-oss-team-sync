@@ -58,6 +58,20 @@ features:
   #
   disableUserSync: false
 
+  #
+  # Grafana: delete everything in Grafana that is no longer in this configuration or in the source.
+  # Teams are deleted in organizations referenced by "teams", folders in organizations referenced by "folders",
+  # and users (basicauth only) that are not returned by the source. Server admins, "admin" and the sync user are never deleted.
+  # Default false
+  #
+  deleteUnlisted: false
+
+  #
+  # Grafana: only log what "deleteUnlisted" would delete, without deleting anything
+  # Default true
+  #
+  dryRun: true
+
 
 
 #
@@ -108,23 +122,33 @@ grafana:
 #
 # Teams you want to sync to Grafana
 #
-# Each entry can either be a plain string (synced into the default Grafana organization,
-# i.e. whichever org your configured credentials default to), or an object specifying
-# a specific organization to sync into via "orgId".
+# Each entry is an object with a "name" (the Entra ID group name) and "orgs", which maps Grafana
+# organization IDs (greater than 0) to the role the group's members get in that organization.
+# Roles are Viewer, Editor or Admin. Every team needs at least one organization.
 #
-# WARNING: using a non-default "orgId" requires grafana.authtype to be set to "basicauth",
-# since a Grafana service account token/API key is always scoped to a single organization.
+# Roles are enforced on every sync, and when a user is in several groups with a role for the same
+# organization, the highest role wins.
+#
+# WARNING: teams in an organization other than the one your token belongs to (and any non-default
+# folder "orgId") require grafana.authtype to be set to "basicauth", since a Grafana service account
+# token/API key is always scoped to a single organization.
 #
 # Example:
 #
 # teams:
-#   - myGroupName
-#   - name: myOtherGroupName
-#     orgId: 2
+#   - name: myGroupName
+#     orgs:
+#       1: Viewer
+#   - name: myRoleGroupName
+#     orgs:
+#       2: Editor
+#       3: Admin
 #
 
 teams: []
-  # - myGroupName
+  # - name: myGroupName
+  #   orgs:
+  #     1: Viewer
 
 
 

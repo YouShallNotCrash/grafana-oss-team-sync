@@ -3,32 +3,109 @@
 
 package configtypes
 
-import "strings"
+import (
+	"errors"
+	"fmt"
+	"maps"
+	"slices"
+	"strings"
+)
 
-// Team describes a single group/team to sync and the Grafana organization it should be synced into.
+// Team describes a single group/team to sync and the Grafana organizations it should be synced into.
 //
-// In YAML, a team can either be given as a plain string (using the default organization)
-// or as an object with "name" and "orgId" keys:
+// In YAML, a team is an object with a "name" and an "orgs" map, which maps each organization ID
+// to the organization role that members of the group receive in that organization.
+// At least one organization is required:
 //
 //	teams:
-//	  - myTeamWithDefaultOrg
 //	  - name: myTeamInOrg2
-//	    orgId: 2
+//	    orgs:
+//	      2: Viewer
+//	  - name: myTeamWithRoles
+//	    orgs:
+//	      2: Editor
+//	      3: Admin
 type Team struct {
-	Name  string `yaml:"name"`
-	OrgID int64  `yaml:"orgId"`
+	Name string            `yaml:"name"`
+	Orgs map[int64]OrgRole `yaml:"orgs"`
+}
+
+// TargetOrgs returns the Grafana organizations this entry syncs into, in ascending order.
+func (t Team) TargetOrgs() []int64 {
+	return slices.Sorted(maps.Keys(t.Orgs))
+}
+
+// RoleFor returns the organization role configured for orgID, or an empty role if none is configured.
+func (t Team) RoleFor(orgID int64) OrgRole {
+	return t.Orgs[orgID]
 }
 
 type Teams []Team
+
+// OrgRole is the Grafana organization role granted to the members of a group.
+type OrgRole string
+
+const (
+	OrgRoleViewer OrgRole = "Viewer"
+	OrgRoleEditor OrgRole = "Editor"
+	OrgRoleAdmin  OrgRole = "Admin"
+)
+
+var (
+	ErrInvalidOrgRole   = errors.New("invalid organization role defined")
+	ErrInvalidTeamOrgID = errors.New("invalid organization ID defined in teams orgs, IDs must be greater than 0")
+	ErrTeamWithoutOrgs  = errors.New("a team must define at least one organization with a role in orgs")
+)
+
+// Rank orders the roles by privilege. An unknown or empty role ranks 0.
+func (r OrgRole) Rank() int {
+	switch r {
+	case OrgRoleViewer:
+		return 1
+	case OrgRoleEditor:
+		return 2
+	case OrgRoleAdmin:
+		return 3
+	}
+	return 0
+}
+
+// ParseOrgRole returns the canonical role for the given name (case-insensitive).
+func ParseOrgRole(in string) (OrgRole, error) {
+	for _, role := range []OrgRole{OrgRoleViewer, OrgRoleEditor, OrgRoleAdmin} {
+		if strings.EqualFold(in, string(role)) {
+			return role, nil
+		}
+	}
+	return "", fmt.Errorf("%w: %q", ErrInvalidOrgRole, in)
+}
 
 const (
 	TeamsDefault   string = ""
 	TeamsFlagHelp  string = "the comma-separated list of teams you want to sync"
 	TeamsParameter string = "teams"
-
-	// TeamsDefaultOrgID is used for display/validation purposes to describe "no explicit org configured".
-	TeamsDefaultOrgID int64 = 0
 )
+
+// ValidateTeamOrgs checks that every team defines at least one organization and that each
+// organization ID and role is valid. It also normalizes the role names.
+func (c *Config) ValidateTeamOrgs() error {
+	for i, team := range c.Teams {
+		if len(team.Orgs) == 0 {
+			return fmt.Errorf("%w (team %q)", ErrTeamWithoutOrgs, team.Name)
+		}
+		for orgID, role := range team.Orgs {
+			if orgID <= 0 {
+				return fmt.Errorf("%w (team %q, orgId %d)", ErrInvalidTeamOrgID, team.Name, orgID)
+			}
+			canonical, err := ParseOrgRole(string(role))
+			if err != nil {
+				return fmt.Errorf("%w (team %q, orgId %d)", err, team.Name, orgID)
+			}
+			c.Teams[i].Orgs[orgID] = canonical
+		}
+	}
+	return nil
+}
 
 // Names returns the plain list of team display names, e.g. to query a source plugin.
 func (t Teams) Names() []string {

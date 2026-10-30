@@ -30,8 +30,12 @@ grafana:
 
 
 teams:
-  - group-unit-1
-  - group-unit-2
+  - name: group-unit-1
+    orgs:
+      1: Viewer
+  - name: group-unit-2
+    orgs:
+      2: Viewer
 
 
 folders:

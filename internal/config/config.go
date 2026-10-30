@@ -101,9 +101,15 @@ func loadEnvironmentVariables(k *koanf.Koanf) error {
 			case configtypes.FeaturesDisableUsersOptimized:
 				return configtypes.FeaturesDisableUsersParameter, v
 
+			case configtypes.FeaturesDeleteUnlistedOptimized:
+				return configtypes.FeaturesDeleteUnlistedParameter, v
+
+			case configtypes.FeaturesDryRunOptimized:
+				return configtypes.FeaturesDryRunParameter, v
+
 			// "teams" - respect comma separated list
 			case configtypes.TeamsParameter:
-				return k, strings.Split(v, ",")
+				return k, splitTeamNames(v)
 			}
 
 			return k, v
@@ -147,9 +153,15 @@ func loadCLIParameter(k *koanf.Koanf, fs *pflag.FlagSet) error {
 		case configtypes.FeaturesDisableUsersOptimized:
 			return configtypes.FeaturesDisableUsersParameter, val
 
+		case configtypes.FeaturesDeleteUnlistedOptimized:
+			return configtypes.FeaturesDeleteUnlistedParameter, val
+
+		case configtypes.FeaturesDryRunOptimized:
+			return configtypes.FeaturesDryRunParameter, val
+
 		// "teams" - respect comma separated list
 		case configtypes.TeamsParameter:
-			return key, strings.Split(val.(string), ",")
+			return key, splitTeamNames(val.(string))
 		}
 
 		return key, val
@@ -173,11 +185,23 @@ func loadOptionalAuthFile(k *koanf.Koanf) error {
 	return nil
 }
 
-// teamStringDecodeHook allows the "teams" list to contain either plain strings
-// (synced to the default Grafana organization) or {name, orgId} objects.
+// splitTeamNames splits the comma separated "teams" input and drops empty entries,
+// so an unset value (the flag default is "") yields no teams instead of a team without a name.
+func splitTeamNames(value string) []string {
+	var names []string
+	for _, name := range strings.Split(value, ",") {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			names = append(names, trimmed)
+		}
+	}
+	return names
+}
+
+// teamStringDecodeHook rejects the plain-string team form (a bare team name without organizations),
+// so every team in the "teams" list must be an object with "name" and "orgs" keys.
 func teamStringDecodeHook(from reflect.Type, to reflect.Type, data any) (any, error) {
 	if from.Kind() == reflect.String && to == reflect.TypeOf(configtypes.Team{}) {
-		return configtypes.Team{Name: data.(string)}, nil
+		return nil, fmt.Errorf("%w (team %q)", configtypes.ErrTeamWithoutOrgs, data)
 	}
 	return data, nil
 }
@@ -239,25 +263,27 @@ func Load() error {
 		slog.Bool(configtypes.FeaturesDisableFoldersOptimized, Instance.Features.DisableFolders),
 		slog.Bool(configtypes.FeaturesDisableUsersOptimized, Instance.Features.DisableUserSync),
 		slog.Bool(configtypes.FeaturesAddLocalAdminToTeamsOptimized, Instance.Features.AddLocalAdminToTeams),
+		slog.Bool(configtypes.FeaturesDeleteUnlistedOptimized, Instance.Features.DeleteUnlisted),
+		slog.Bool(configtypes.FeaturesDryRunOptimized, Instance.Features.DryRun),
 	)
 
 	// Validate Grafana authtype input
-	if err := Instance.ValdidateGrafanaAuthType(); err != nil {
+	if err := Instance.ValidateGrafanaAuthType(); err != nil {
 		return err
 	}
 
 	// Validate Grafana connection scheme input
-	if err := Instance.ValdidateGrafanaScheme(); err != nil {
+	if err := Instance.ValidateGrafanaScheme(); err != nil {
 		return err
 	}
 
-	// Validate that non-default organizations are only used with basicauth
-	if err := Instance.ValidateOrgUsage(); err != nil {
+	// Validate that every team defines its organizations and roles
+	if err := Instance.ValidateTeamOrgs(); err != nil {
 		return err
 	}
 
 	// Validate source input
-	if err := Instance.ValdidateSourcePlugin(); err != nil {
+	if err := Instance.ValidateSourcePlugin(); err != nil {
 		return err
 	}
 

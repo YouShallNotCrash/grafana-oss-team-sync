@@ -31,21 +31,30 @@ func (f *Folder) api() (*client.GrafanaHTTPAPI, error) {
 	return Instance.api, nil
 }
 
+// folderPageSize is the number of folders requested per page when searching by title.
+const folderPageSize int64 = 1000
+
 func (f *Folder) searchFolder() (*models.FolderSearchHit, error) {
 	api, err := f.api()
 	if err != nil {
 		return nil, err
 	}
-	// TODO: respect possible pagination
-	result, err := api.Folders.GetFolders(folders.NewGetFoldersParams())
-	if err != nil {
-		return nil, err
+	// Grafana pages folder results (1-based), so walk the pages until the folder is found or a short page ends the search
+	for page := int64(1); ; page++ {
+		limit := folderPageSize
+		pageNumber := page
+		result, err := api.Folders.GetFolders(folders.NewGetFoldersParams().WithLimit(&limit).WithPage(&pageNumber))
+		if err != nil {
+			return nil, err
+		}
+		index := slices.IndexFunc(result.Payload, func(s *models.FolderSearchHit) bool { return s.Title == f.Title })
+		if index >= 0 {
+			return result.Payload[index], nil
+		}
+		if int64(len(result.Payload)) < folderPageSize {
+			return nil, nil
+		}
 	}
-	index := slices.IndexFunc(result.Payload, func(s *models.FolderSearchHit) bool { return s.Title == f.Title })
-	if index < 0 {
-		return nil, nil
-	}
-	return result.GetPayload()[index], nil
 }
 
 func (f *Folder) doesFolderExist() (bool, error) {
